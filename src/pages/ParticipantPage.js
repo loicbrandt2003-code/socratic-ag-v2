@@ -11,7 +11,7 @@ export default function ParticipantPage() {
 
   const [name, setName] = useState("");
   const [nameSet, setNameSet] = useState(false);
-  const [hasObjection, setHasObjection] = useState(null); // null | true | false
+  const [hasObjection, setHasObjection] = useState(null);
   const [perception, setPerception] = useState(null);
   const [interestType, setInterestType] = useState(null);
   const [riskLevel, setRiskLevel] = useState(null);
@@ -23,7 +23,7 @@ export default function ParticipantPage() {
 
   if (!session || !point) {
     return (
-      <div style={pageStyle}>
+      <div style={{ minHeight: "100vh", background: "#f5f5f0", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F }}>
         <div style={{ textAlign: "center", padding: 48 }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>🔍</div>
           <p style={{ color: "#666" }}>Session ou point introuvable.</p>
@@ -47,10 +47,11 @@ export default function ParticipantPage() {
     setSubmitted(true);
   }
 
+  // ── Success screen ──────────────────────────────────────────────────────────
   if (submitted) {
     return (
       <div style={pageStyle}>
-        <Header session={session} point={point} />
+        <TopBar session={session} point={point} />
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
           <div style={{ textAlign: "center" }}>
             <div style={{ width: 72, height: 72, background: "#dcfce7", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 20px" }}>✓</div>
@@ -62,130 +63,171 @@ export default function ParticipantPage() {
     );
   }
 
-  // Step 1: name
+  // ── Name screen ─────────────────────────────────────────────────────────────
   if (!nameSet) {
     return (
       <div style={pageStyle}>
-        <Header session={session} point={point} />
+        <TopBar session={session} point={point} />
         <div style={bodyStyle}>
-          <h2 style={qTitle}>Bienvenue</h2>
-          <p style={qSub}>Entrez votre nom pour participer au questionnaire.</p>
-          <label style={lbl}>Nom & Prénom</label>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Marie Dupont" autoFocus
-            onKeyDown={e => e.key === "Enter" && name.trim() && setNameSet(true)}
-            style={inp} />
-          <button onClick={() => name.trim() && setNameSet(true)} disabled={!name.trim()}
-            style={{ ...bigBtn, opacity: name.trim() ? 1 : 0.4 }}>
-            Commencer →
-          </button>
+          <div style={card}>
+            <h2 style={{ fontSize: 26, fontWeight: 800, textAlign: "center", margin: "0 0 6px" }}>Bienvenue</h2>
+            <p style={subText}>Entrez votre nom pour participer</p>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Votre nom et prénom"
+              autoFocus
+              onKeyDown={e => e.key === "Enter" && name.trim() && setNameSet(true)}
+              style={inputStyle}
+            />
+            <button
+              onClick={() => name.trim() && setNameSet(true)}
+              disabled={!name.trim()}
+              style={{ ...submitBtn, opacity: name.trim() ? 1 : 0.4 }}
+            >
+              Commencer →
+            </button>
+          </div>
           <div style={connectedAs}>Connecté en tant que...</div>
         </div>
       </div>
     );
   }
 
-  // Main questionnaire — all on one page like the screenshots
+  // ── Main questionnaire ──────────────────────────────────────────────────────
+  const canSubmitObjection = perception && interestType && riskLevel && protectsCollective && verifiable && canLift;
+
   return (
     <div style={pageStyle}>
-      <Header session={session} point={point} name={name} />
+      <TopBar session={session} point={point} />
       <div style={bodyStyle}>
 
-        {/* Q1: Objection? */}
-        <div style={sectionBox}>
-          <h2 style={{ ...qTitle, fontSize: 26 }}>Y a-t-il une objection ?</h2>
-          <p style={{ ...qSub, margin: "0 0 20px" }}>Concernant: {point.title}</p>
-          <RadioOval
-            options={[
-              { val: false, label: "⊙  Non, aucune objection" },
-              { val: true, label: "△  Oui, j'ai une objection" },
-            ]}
-            value={hasObjection}
-            onChange={v => { setHasObjection(v); if (v === false) { setPerception(null); } }}
-          />
+        {/* Q1 — Objection ? */}
+        <div style={card}>
+          <h2 style={{ fontSize: 26, fontWeight: 800, textAlign: "center", lineHeight: 1.2, margin: "0 0 6px" }}>
+            Y a-t-il une objection ?
+          </h2>
+          <p style={subText}>Concernant: {point.title}</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <OvalRadio
+              selected={hasObjection === false}
+              onClick={() => setHasObjection(false)}
+              icon="⊙"
+              label="Non, aucune objection"
+            />
+            <OvalRadio
+              selected={hasObjection === true}
+              onClick={() => setHasObjection(true)}
+              icon="△"
+              label="Oui, j'ai une objection"
+            />
+          </div>
         </div>
 
-        {/* If no objection, just submit */}
+        {/* No objection → simple submit */}
         {hasObjection === false && (
-          <button onClick={handleSubmit} style={{ ...bigBtn, marginTop: 8 }}>
+          <button onClick={handleSubmit} style={submitBtn}>
             Confirmer — Pas d'objection
           </button>
         )}
 
-        {/* If objection: show all detail questions */}
+        {/* Objection details */}
         {hasObjection === true && (
           <>
-            <div style={sectionBox}>
-              <p style={sectionLabel}>Détails de l'objection</p>
+            {/* Perception + Interest */}
+            <div style={card}>
+              <p style={sectionTitle}>Détails de l'objection</p>
 
-              {/* Perception */}
               <p style={qLabel}>Comment percevez-vous ce point ?</p>
-              <RadioOval
-                options={[
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+                {[
                   { val: "comprehension", label: "Problème de compréhension" },
                   { val: "reglement", label: "Problème de règlement" },
                   { val: "objection", label: "Objection de fond" },
-                ]}
-                value={perception}
-                onChange={setPerception}
-              />
+                ].map(o => (
+                  <OvalRadio
+                    key={o.val}
+                    selected={perception === o.val}
+                    onClick={() => setPerception(o.val)}
+                    label={o.label}
+                  />
+                ))}
+              </div>
 
-              {/* Interest type */}
-              <p style={{ ...qLabel, marginTop: 20 }}>Quel intérêt est concerné ?</p>
+              <p style={qLabel}>Quel intérêt est concerné ?</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {["Personnel", "Sous-groupe", "Collectif", "Juridique", "Financier"].map(opt => {
-                  const val = opt.toLowerCase().replace("-", "-");
-                  const sel = interestType === val;
-                  return (
-                    <button key={val} onClick={() => setInterestType(val)}
-                      style={{ ...ovalBtn, background: sel ? "#111" : "#fff", color: sel ? "#fff" : "#111", border: `1.5px solid ${sel ? "#111" : "#e5e5e5"}` }}>
-                      <span style={ovalDot} />
-                      {opt}
-                    </button>
-                  );
-                })}
+                {[
+                  { val: "personnel", label: "Personnel" },
+                  { val: "sous-groupe", label: "Sous-groupe" },
+                  { val: "collectif", label: "Collectif" },
+                  { val: "juridique", label: "Juridique" },
+                  { val: "financier", label: "Financier" },
+                ].map(o => (
+                  <OvalRadio
+                    key={o.val}
+                    selected={interestType === o.val}
+                    onClick={() => setInterestType(o.val)}
+                    label={o.label}
+                  />
+                ))}
               </div>
             </div>
 
-            <div style={sectionBox}>
-              {/* Risk level */}
+            {/* Risk + Binary questions + Amendment */}
+            <div style={card}>
               <p style={qLabel}>Niveau du risque</p>
-              <RadioOval
-                options={[
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+                {[
                   { val: "certain", label: "Certain" },
                   { val: "probable", label: "Probable" },
                   { val: "hypothetique", label: "Hypothétique" },
-                ]}
-                value={riskLevel}
-                onChange={setRiskLevel}
+                ].map(o => (
+                  <OvalRadio
+                    key={o.val}
+                    selected={riskLevel === o.val}
+                    onClick={() => setRiskLevel(o.val)}
+                    label={o.label}
+                  />
+                ))}
+              </div>
+
+              <BinaryQuestion
+                label="L'objection protège-t-elle un intérêt collectif ?"
+                value={protectsCollective}
+                onChange={setProtectsCollective}
+              />
+              <BinaryQuestion
+                label="Est-elle fondée sur un fait vérifiable ?"
+                value={verifiable}
+                onChange={setVerifiable}
+              />
+              <BinaryQuestion
+                label="Peut-on lever le risque sans bloquer la décision ?"
+                value={canLift}
+                onChange={setCanLift}
               />
 
-              {/* Protects collective */}
-              <p style={{ ...qLabel, marginTop: 20 }}>L'objection protège-t-elle un intérêt collectif ?</p>
-              <TwoBtn value={protectsCollective} onChange={setProtectsCollective} />
-
-              {/* Verifiable */}
-              <p style={{ ...qLabel, marginTop: 20 }}>Est-elle fondée sur un fait vérifiable ?</p>
-              <TwoBtn value={verifiable} onChange={setVerifiable} />
-
-              {/* Can lift */}
-              <p style={{ ...qLabel, marginTop: 20 }}>Peut-on lever le risque sans bloquer la décision ?</p>
-              <TwoBtn value={canLift} onChange={setCanLift} />
-
-              {/* Amendment */}
               <p style={{ ...qLabel, marginTop: 20 }}>Proposition d'amendement (optionnel)</p>
               <textarea
                 value={amendment}
                 onChange={e => setAmendment(e.target.value)}
                 placeholder="Proposez une modification pour lever l'objection..."
                 rows={4}
-                style={{ width: "100%", padding: "12px 14px", border: "1px solid #e5e5e5", borderRadius: 10, fontSize: 14, fontFamily: F, outline: "none", resize: "vertical", boxSizing: "border-box", background: "#f5f5f0" }}
+                style={{
+                  width: "100%", padding: "12px 14px",
+                  border: "1px solid #e5e5e5", borderRadius: 10,
+                  fontSize: 14, fontFamily: F, outline: "none",
+                  resize: "none", boxSizing: "border-box",
+                  background: "#f5f5f0", color: "#888",
+                }}
               />
             </div>
 
             <button
               onClick={handleSubmit}
-              disabled={!perception || !interestType || !riskLevel || !protectsCollective || !verifiable || !canLift}
-              style={{ ...bigBtn, opacity: (perception && interestType && riskLevel && protectsCollective && verifiable && canLift) ? 1 : 0.4, marginTop: 8 }}>
+              disabled={!canSubmitObjection}
+              style={{ ...submitBtn, opacity: canSubmitObjection ? 1 : 0.4 }}
+            >
               Soumettre mon objection
             </button>
           </>
@@ -197,61 +239,157 @@ export default function ParticipantPage() {
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
-function Header({ session, point, name }) {
+function TopBar({ session, point }) {
   return (
-    <div style={{ background: "#fff", borderBottom: "1px solid #f0f0f0", padding: "14px 20px", textAlign: "center" }}>
-      <div style={{ fontSize: 13, color: "#888", marginBottom: 2 }}>{session.name}</div>
-      <div style={{ fontWeight: 800, fontSize: 17, color: "#111" }}>{point.title}</div>
+    <div style={{
+      background: "#fff",
+      borderBottom: "1px solid #f0f0f0",
+      padding: "12px 20px",
+      textAlign: "center",
+    }}>
+      <div style={{ fontSize: 12, color: "#999", marginBottom: 2 }}>{session.name}</div>
+      <div style={{ fontWeight: 800, fontSize: 16, color: "#111" }}>{point.title}</div>
     </div>
   );
 }
 
-function RadioOval({ options, value, onChange }) {
+function OvalRadio({ selected, onClick, icon, label }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {options.map(o => {
-        const sel = value === o.val;
-        return (
-          <button key={String(o.val)} onClick={() => onChange(o.val)}
-            style={{ ...ovalBtn, background: sel ? "#111" : "#fff", color: sel ? "#fff" : "#111", border: `1.5px solid ${sel ? "#111" : "#e5e5e5"}`, width: "100%" }}>
-            <span style={{ ...ovalDot, background: sel ? "#fff" : "#e5e5e5", border: sel ? "4px solid #555" : "1px solid #ccc" }} />
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        width: "100%",
+        padding: "14px 16px",
+        background: selected ? "#111" : "#fff",
+        border: `1.5px solid ${selected ? "#111" : "#e8e8e8"}`,
+        borderRadius: 10,
+        cursor: "pointer",
+        fontFamily: F,
+        textAlign: "left",
+        transition: "all 0.15s",
+      }}
+    >
+      {/* Oval pill indicator */}
+      <span style={{
+        width: 22,
+        height: 36,
+        borderRadius: 20,
+        border: `2px solid ${selected ? "#fff" : "#ddd"}`,
+        background: selected ? "#333" : "#fff",
+        display: "inline-block",
+        flexShrink: 0,
+      }} />
+      {icon && <span style={{ fontSize: 15, color: selected ? "#fff" : "#555" }}>{icon}</span>}
+      <span style={{ fontSize: 15, fontWeight: 500, color: selected ? "#fff" : "#111" }}>{label}</span>
+    </button>
   );
 }
 
-function TwoBtn({ value, onChange }) {
+function BinaryQuestion({ label, value, onChange }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-      {["Oui", "Non"].map(opt => {
-        const sel = value === opt;
-        return (
-          <button key={opt} onClick={() => onChange(opt)}
-            style={{ padding: "12px", background: sel ? "#111" : "#fff", color: sel ? "#fff" : "#111", border: `1.5px solid ${sel ? "#111" : "#e5e5e5"}`, borderRadius: 10, cursor: "pointer", fontFamily: F, fontWeight: 600, fontSize: 15 }}>
+    <div style={{ marginBottom: 20 }}>
+      <p style={{ ...qLabel, marginBottom: 10 }}>{label}</p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {["Oui", "Non"].map(opt => (
+          <button
+            key={opt}
+            onClick={() => onChange(opt)}
+            style={{
+              padding: "13px",
+              background: value === opt ? "#111" : "#fff",
+              color: value === opt ? "#fff" : "#111",
+              border: `1.5px solid ${value === opt ? "#111" : "#e8e8e8"}`,
+              borderRadius: 10,
+              cursor: "pointer",
+              fontFamily: F,
+              fontWeight: 600,
+              fontSize: 15,
+              transition: "all 0.15s",
+            }}
+          >
             {opt}
           </button>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }
 
-// Styles
-const pageStyle = { minHeight: "100vh", background: "#f5f5f0", fontFamily: F, display: "flex", flexDirection: "column" };
-const bodyStyle = { flex: 1, padding: "24px 20px", maxWidth: 480, margin: "0 auto", width: "100%", boxSizing: "border-box" };
-const sectionBox = { background: "#fff", borderRadius: 16, padding: 20, marginBottom: 14, border: "1px solid #ebebeb" };
-const sectionLabel = { fontWeight: 800, fontSize: 16, margin: "0 0 16px", color: "#111" };
-const qTitle = { fontSize: 28, fontWeight: 800, lineHeight: 1.2, margin: "0 0 8px", color: "#111", textAlign: "center" };
-const qSub = { color: "#888", fontSize: 14, textAlign: "center", margin: "0 0 24px" };
-const qLabel = { fontSize: 14, fontWeight: 600, color: "#333", margin: "0 0 10px" };
-const lbl = { fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6, color: "#444" };
-const inp = { width: "100%", padding: "12px 14px", border: "1.5px solid #e5e5e5", borderRadius: 10, fontSize: 15, fontFamily: F, outline: "none", boxSizing: "border-box", marginBottom: 16 };
-const bigBtn = { width: "100%", padding: "16px", background: "#111", color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: F };
-const ovalBtn = { display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 10, cursor: "pointer", fontFamily: F, fontSize: 15, fontWeight: 500, textAlign: "left" };
-const ovalDot = { width: 20, height: 20, borderRadius: "50%", display: "inline-block", flexShrink: 0, border: "1px solid #ccc", background: "#e5e5e5" };
-const connectedAs = { textAlign: "center", fontSize: 12, color: "#aaa", marginTop: 24, paddingBottom: 24 };
+// ── Styles ─────────────────────────────────────────────────────────────────────
+const pageStyle = {
+  minHeight: "100vh",
+  background: "#f5f5f0",
+  fontFamily: F,
+  display: "flex",
+  flexDirection: "column",
+};
+const bodyStyle = {
+  flex: 1,
+  padding: "16px 16px 32px",
+  maxWidth: 480,
+  margin: "0 auto",
+  width: "100%",
+  boxSizing: "border-box",
+};
+const card = {
+  background: "#fff",
+  borderRadius: 16,
+  padding: "24px 20px",
+  marginBottom: 12,
+  border: "1px solid #ebebeb",
+};
+const subText = {
+  color: "#888",
+  fontSize: 13,
+  textAlign: "center",
+  margin: "0 0 20px",
+};
+const sectionTitle = {
+  fontWeight: 800,
+  fontSize: 16,
+  margin: "0 0 18px",
+  color: "#111",
+};
+const qLabel = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#333",
+  margin: "0 0 10px",
+  lineHeight: 1.4,
+};
+const inputStyle = {
+  width: "100%",
+  padding: "13px 14px",
+  border: "1.5px solid #e5e5e5",
+  borderRadius: 10,
+  fontSize: 15,
+  fontFamily: F,
+  outline: "none",
+  boxSizing: "border-box",
+  marginBottom: 16,
+};
+const submitBtn = {
+  width: "100%",
+  padding: "16px",
+  background: "#111",
+  color: "#fff",
+  border: "none",
+  borderRadius: 12,
+  fontSize: 15,
+  fontWeight: 700,
+  cursor: "pointer",
+  fontFamily: F,
+  marginBottom: 12,
+};
+const connectedAs = {
+  textAlign: "center",
+  fontSize: 12,
+  color: "#bbb",
+  marginTop: 16,
+  paddingBottom: 16,
+};
