@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
-import { getSession, getResponses } from "../db";
+import { onSessionChange, onResponsesChange } from "../db";
 
 const F = "'DM Sans','Helvetica Neue',Arial,sans-serif";
-const riskColors = { certain: "#dc2626", probable: "#d97706", hypothetique: "#65a30d" };
 const perceptionLabel = { comprehension: "Problème de compréhension", reglement: "Problème de règlement", objection: "Objection de fond" };
 const interestLabel = { personnel: "Personnel", "sous-groupe": "Sous-groupe", collectif: "Collectif", juridique: "Juridique", financier: "Financier" };
 
@@ -16,14 +15,9 @@ export default function PointPage() {
   const [votes, setVotes] = useState({ pour: 0, contre: 0, abstention: 0 });
 
   useEffect(() => {
-    const refresh = () => {
-      const s = getSession(sessionId);
-      if (s) setSession(s);
-      setResps([...getResponses(sessionId, pointId)]);
-    };
-    refresh();
-    const t = setInterval(refresh, 700);
-    return () => clearInterval(t);
+    const unsubSession = onSessionChange(sessionId, setSession);
+    const unsubResps = onResponsesChange(sessionId, pointId, setResps);
+    return () => { unsubSession(); unsubResps(); };
   }, [sessionId, pointId]);
 
   if (!session) return null;
