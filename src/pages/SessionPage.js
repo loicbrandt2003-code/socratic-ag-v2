@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
-import { getSession, getResponses, addPoint, deletePoint, DB } from "../db";
+import { onSessionChange, onAllResponsesChange, addPoint, deletePoint } from "../db";
 
 const F = "'DM Sans','Helvetica Neue',Arial,sans-serif";
 
@@ -9,45 +9,53 @@ export default function SessionPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const [session, setSession] = useState(null);
-  const [resps, setResps] = useState({});
-  const [activity, setActivity] = useState([]);
+  const [allResps, setAllResps] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   const [showQR, setShowQR] = useState(null);
   const [ptTitle, setPtTitle] = useState("");
   const [ptDesc, setPtDesc] = useState("");
 
   useEffect(() => {
-    const refresh = () => {
-      const s = getSession(sessionId);
-      if (!s) return;
-      setSession({ ...s, points: [...(s.points || [])] });
-      const r = {};
-      (s.points || []).forEach(p => { r[p.id] = getResponses(sessionId, p.id); });
-      setResps(r);
-      const all = [];
-      (s.points || []).forEach(p => getResponses(sessionId, p.id).forEach(resp => all.push({ ...resp, pointTitle: p.title })));
-      all.sort((a, b) => b.ts - a.ts);
-      setActivity(all.slice(0, 10));
-    };
-    refresh();
-    const t = setInterval(refresh, 800);
-    return () => clearInterval(t);
+    // Écoute la session en temps réel
+    const unsubSession = onSessionChange(sessionId, setSession);
+    // Écoute toutes les réponses en temps réel
+    const unsubResps = onAllResponsesChange(sessionId, setAllResps);
+    return () => { unsubSession(); unsubResps(); };
   }, [sessionId]);
 
-  if (!session) return <div style={{ padding: 48, fontFamily: F, textAlign: "center", color: "#666" }}>Session introuvable.</div>;
+  if (!session) return (
+    <div style={{ padding: 48, fontFamily: F, textAlign: "center", color: "#666" }}>
+      Chargement...
+    </div>
+  );
 
-  function handleAddPoint() {
+  async function handleAddPoint() {
     if (!ptTitle.trim()) return;
-    addPoint(sessionId, ptTitle.trim(), ptDesc.trim());
+    await addPoint(sessionId, ptTitle.trim(), ptDesc.trim());
     setPtTitle(""); setPtDesc(""); setShowAdd(false);
   }
 
-  function handleDelete(pid) {
-    deletePoint(sessionId, pid);
-    setSession({ ...getSession(sessionId) });
+  async function handleDelete(pid) {
+    await deletePoint(sessionId, pid);
   }
 
-  const totalPart = new Set(Object.values(resps).flatMap(arr => arr.map(r => r.name))).size;
+  // Calculs à partir des réponses temps réel
+  const respsByPoint = {};
+  allResps.forEach(r => {
+    if (!respsByPoint[r.pointId]) respsByPoint[r.pointId] = [];
+    respsByPoint[r.pointId].push(r);
+  });
+
+  const totalPart = new Set(allResps.map(r => r.name)).size;
+
+  const activity = [...allResps]
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, 10)
+    .map(r => ({
+      ...r,
+      pointTitle: session.points?.find(p => p.id === r.pointId)?.title || "",
+    }));
+
   const participantUrl = (pid) => `${window.location.origin}/participer/${sessionId}/${pid}`;
 
   return (
@@ -83,7 +91,7 @@ export default function SessionPage() {
             ? <div style={emptyCard}>Aucun point à l'ordre du jour</div>
             : <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {session.points.map(p => {
-                  const pr = resps[p.id] || [];
+                  const pr = respsByPoint[p.id] || [];
                   const obj = pr.filter(r => r.hasObjection);
                   const ok = pr.filter(r => !r.hasObjection);
                   return (
@@ -155,11 +163,9 @@ export default function SessionPage() {
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
                 <QRCodeSVG value={url} size={220} level="M" includeMargin={true} />
               </div>
-              <div style={{ background: "#f5f5f0", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#555", fontFamily: "monospace", marginBottom: 20, wordBreak: "break-all", textAlign: "center" }}>
-                {url}
-              </div>
+              <div style={{ background: "#f5f5f0", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#555", fontFamily: "monospace", marginBottom: 20, wordBreak: "break-all", textAlign: "center" }}>{url}</div>
               <p style={{ color: "#888", fontSize: 13, textAlign: "center", margin: "0 0 20px" }}>
-                Les participants scannent ce QR code avec leur smartphone pour accéder au questionnaire.
+                Les participants scannent ce QR code avec leur smartphone.
               </p>
               <button onClick={() => setShowQR(null)} style={{ ...addPtBtn, width: "100%", justifyContent: "center" }}>Fermer</button>
             </div>
@@ -202,7 +208,6 @@ function StatCard({ val, label, red }) {
   );
 }
 
-// Styles
 const backBtn = { background: "none", border: "none", cursor: "pointer", fontSize: 22, color: "#555", padding: "4px 8px" };
 const iconTopBtn = { width: 36, height: 36, background: "#f5f5f0", border: "1px solid #e5e5e5", borderRadius: 8, cursor: "pointer", fontSize: 16 };
 const projBtn = { padding: "8px 20px", background: "#111", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: F, display: "flex", alignItems: "center", gap: 6 };
