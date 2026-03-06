@@ -1,93 +1,107 @@
-// ─── Shared in-memory store ───────────────────────────────────────────────────
-// In production you'd replace this with a real backend (Firebase, Supabase, etc.)
-// For now, data lives in localStorage so it persists across page refreshes
-// and is shared within the same browser tab session.
+// db.js — base de données Firebase Firestore (remplace localStorage)
+import { db } from "./firebase";
+import {
+  doc, collection, setDoc, getDoc, getDocs,
+  updateDoc, deleteField, onSnapshot, addDoc, serverTimestamp
+} from "firebase/firestore";
 
-const STORAGE_KEY = "socratic_ag_data";
+// ─── Sessions ────────────────────────────────────────────────────────────────
 
-function loadDB() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-  } catch (e) {}
-  return {
-    sessions: {},
-    responses: {},
-    _id: 1,
-  };
-}
-
-function saveDB() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
-  } catch (e) {}
-}
-
-export const DB = loadDB();
-
-let saveTimer = null;
-function scheduleSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveDB, 200);
-}
-
-export function uid() {
-  const id = String(DB._id++);
-  scheduleSave();
-  return id;
-}
-
-export function createSession(name, description) {
-  const id = uid();
-  DB.sessions[id] = {
-    id,
+export async function createSession(name, description) {
+  const ref = await addDoc(collection(db, "sessions"), {
     name,
     description,
     status: "active",
-    createdAt: Date.now(),
+    createdAt: serverTimestamp(),
     points: [],
-  };
-  scheduleSave();
-  return id;
+  });
+  return ref.id;
 }
 
-export function addPoint(sessionId, title, description) {
-  const id = uid();
-  if (!DB.sessions[sessionId]) return null;
-  DB.sessions[sessionId].points.push({
-    id,
+export async function getSession(sessionId) {
+  const snap = await getDoc(doc(db, "sessions", sessionId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
+}
+
+export async function getAllSessions() {
+  const snap = await getDocs(collection(db, "sessions"));
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+
+export function onSessionsChange(callback) {
+  return onSnapshot(collection(db, "sessions"), snap => {
+    const sessions = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    callback(sessions);
+  });
+}
+
+export function onSessionChange(sessionId, callback) {
+  return onSnapshot(doc(db, "sessions", sessionId), snap => {
+    if (snap.exists()) callback({ id: snap.id, ...snap.data() });
+  });
+}
+
+// ─── Points ──────────────────────────────────────────────────────────────────
+
+export async function addPoint(sessionId, title, description) {
+  const sessionRef = doc(db, "sessions", sessionId);
+  const snap = await getDoc(sessionRef);
+  if (!snap.exists()) return null;
+  const points = snap.data().points || [];
+  const newPoint = {
+    id: Date.now().toString(),
     title,
     description,
     status: "pending",
     createdAt: Date.now(),
+  };
+  points.push(newPoint);
+  await updateDoc(sessionRef, { points });
+  return newPoint.id;
+}
+
+export async function deletePoint(sessionId, pointId) {
+  const sessionRef = doc(db, "sessions", sessionId);
+  const snap = await getDoc(sessionRef);
+  if (!snap.exists()) return;
+  const points = (snap.data().points || []).filter(p => p.id !== pointId);
+  await updateDoc(sessionRef, { points });
+}
+
+// ─── Responses ───────────────────────────────────────────────────────────────
+
+export async function addResponse(sessionId, pointId, data) {
+  await addDoc(collection(db, "sessions", sessionId, "responses"), {
+    ...data,
+    pointId,
+    ts: Date.now(),
   });
-  scheduleSave();
-  return id;
 }
 
-export function deletePoint(sessionId, pointId) {
-  if (!DB.sessions[sessionId]) return;
-  DB.sessions[sessionId].points = DB.sessions[sessionId].points.filter(
-    (p) => p.id !== pointId
-  );
-  scheduleSave();
+export async function getResponses(sessionId, pointId) {
+  const snap = await getDocs(collection(db, "sessions", sessionId, "responses"));
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(r => r.pointId === pointId);
 }
 
-export function getSession(sessionId) {
-  return DB.sessions[sessionId] || null;
+export function onResponsesChange(sessionId, pointId, callback) {
+  return onSnapshot(collection(db, "sessions", sessionId, "responses"), snap => {
+    const resps = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(r => r.pointId === pointId);
+    callback(resps);
+  });
 }
 
-export function getAllSessions() {
-  return Object.values(DB.sessions).sort((a, b) => b.createdAt - a.createdAt);
-}
-
-export function getResponses(sessionId, pointId) {
-  return DB.responses[`${sessionId}:${pointId}`] || [];
-}
-
-export function addResponse(sessionId, pointId, data) {
-  const key = `${sessionId}:${pointId}`;
-  if (!DB.responses[key]) DB.responses[key] = [];
-  DB.responses[key].push({ id: uid(), ...data, ts: Date.now() });
-  scheduleSave();
+export function onAllResponsesChange(sessionId, callback) {
+  return onSnapshot(collection(db, "sessions", sessionId, "responses"), snap => {
+    const resps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    callback(resps);
+  });
 }
