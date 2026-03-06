@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAllSessions, createSession } from "../db";
+import { getAllSessions, createSession, onSessionsChange } from "../db";
 
 const F = "'DM Sans','Helvetica Neue',Arial,sans-serif";
 
@@ -10,15 +10,24 @@ export default function Home() {
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setSessions(getAllSessions());
+    // Écoute les sessions en temps réel
+    const unsub = onSessionsChange(setSessions);
+    return () => unsub();
   }, []);
 
-  function handleCreate() {
+  async function handleCreate() {
     if (!name.trim()) return;
-    const id = createSession(name.trim(), desc.trim());
-    navigate(`/session/${id}`);
+    setLoading(true);
+    try {
+      const id = await createSession(name.trim(), desc.trim());
+      navigate(`/session/${id}`);
+    } catch (e) {
+      console.error(e);
+      setLoading(false);
+    }
   }
 
   return (
@@ -66,8 +75,7 @@ export default function Home() {
               </div>
               {s.description && <p style={{ color: "#777", fontSize: 14, margin: "0 0 20px" }}>{s.description}</p>}
               <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => navigate(`/session/${s.id}`)}
-                  style={manageBtn}
+                <button onClick={() => navigate(`/session/${s.id}`)} style={manageBtn}
                   onMouseEnter={e => e.currentTarget.style.borderColor = "#111"}
                   onMouseLeave={e => e.currentTarget.style.borderColor = "#e5e5e5"}>
                   Gérer →
@@ -129,9 +137,9 @@ export default function Home() {
             <label style={labelStyle}>Description (optionnel)</label>
             <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Description..." rows={3}
               style={{ ...inputStyle, resize: "vertical" }} />
-            <button onClick={handleCreate} disabled={!name.trim()}
-              style={{ ...ctaBtnStyle, width: "100%", opacity: name.trim() ? 1 : 0.4 }}>
-              Créer la session
+            <button onClick={handleCreate} disabled={!name.trim() || loading}
+              style={{ ...ctaBtnStyle, width: "100%", opacity: name.trim() && !loading ? 1 : 0.4 }}>
+              {loading ? "Création..." : "Créer la session"}
             </button>
           </div>
         </div>
@@ -140,7 +148,6 @@ export default function Home() {
   );
 }
 
-// Styles
 const navBtnStyle = { padding: "8px 16px", background: "transparent", border: "1px solid #e5e5e5", borderRadius: 8, cursor: "pointer", fontSize: 14, color: "#555", fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", gap: 6 };
 const ctaBtnStyle = { display: "inline-flex", alignItems: "center", gap: 10, padding: "15px 30px", background: "#111", color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" };
 const cardStyle = { background: "#fff", borderRadius: 16, padding: 28, border: "1px solid #e8e8e8", transition: "box-shadow 0.15s,transform 0.15s" };
